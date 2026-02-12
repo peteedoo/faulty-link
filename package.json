@@ -1,0 +1,9 @@
+{
+  "name": "faulty-link",
+  "version": "1.0.0",
+  "description": "Portable private networks for groups and neighborhoods",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080"
+  }
+}
