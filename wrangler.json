@@ -1,0 +1,9 @@
+{
+  "name": "faulty-link",
+  "type": "javascript",
+  "main": "src/index.js",
+  "pages_build_configuration": {
+    "build_command": null,
+    "destination_dir": "/"
+  }
+}
