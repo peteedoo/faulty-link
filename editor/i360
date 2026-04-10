@@ -1,0 +1,306 @@
+#!/usr/bin/env bash
+# i360 — CLI video editor for Insta 360 footage
+# Usage: i360 <command> [options] <input>
+# Run `i360 help` for full usage info.
+
+set -euo pipefail
+
+VERSION="0.1.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="${SCRIPT_DIR}/plugins"
+
+# ─── Colors ──────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# ─── Shared helpers (available to plugins via source) ────────────────
+
+i360_log()   { echo -e "${BLUE}[i360]${RESET} $*"; }
+i360_ok()    { echo -e "${GREEN}  ✓${RESET} $*"; }
+i360_warn()  { echo -e "${YELLOW}  ⚠${RESET} $*" >&2; }
+i360_err()   { echo -e "${RED}  ✗${RESET} $*" >&2; }
+i360_dim()   { echo -e "${DIM}$*${RESET}"; }
+
+# Check that FFmpeg is installed
+require_ffmpeg() {
+  if ! command -v ffmpeg &>/dev/null; then
+    i360_err "FFmpeg is not installed."
+    echo "  Install it with: brew install ffmpeg"
+    exit 1
+  fi
+}
+
+# Validate input file exists and is a video
+validate_input() {
+  local file="$1"
+  if [[ ! -f "$file" ]]; then
+    i360_err "File not found: $file"
+    exit 1
+  fi
+  local ext="${file##*.}"
+  ext="${ext,,}"
+  case "$ext" in
+    mp4|mov|avi|mkv|insv|webm|m4v) ;;
+    *)
+      i360_warn "Unexpected extension .$ext — proceeding anyway"
+      ;;
+  esac
+}
+
+# Generate default output filename
+# Usage: default_output "input.mp4" "reversed"  →  "input_reversed.mp4"
+default_output() {
+  local input="$1" suffix="$2"
+  local dir base ext
+  dir="$(dirname "$input")"
+  base="$(basename "$input")"
+  ext="${base##*.}"
+  base="${base%.*}"
+  echo "${dir}/${base}_${suffix}.${ext}"
+}
+
+# Prompt before overwriting
+confirm_overwrite() {
+  local file="$1"
+  if [[ -f "$file" ]]; then
+    echo -en "${YELLOW}  ⚠ ${file} exists. Overwrite? [y/N]${RESET} "
+    read -r answer
+    if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
+      i360_log "Aborted."
+      exit 0
+    fi
+  fi
+}
+
+# Show file info
+show_info() {
+  local file="$1"
+  if command -v ffprobe &>/dev/null; then
+    local duration codec resolution size
+    duration=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$file" 2>/dev/null | head -1)
+    codec=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$file" 2>/dev/null | head -1)
+    resolution=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$file" 2>/dev/null | head -1 | tr ',' 'x')
+    size=$(du -h "$file" | cut -f1)
+    i360_dim "  ${resolution} | ${codec} | $(printf '%.1f' "$duration")s | ${size}"
+  fi
+}
+
+# Run FFmpeg with progress display
+# Usage: run_ffmpeg <input> <output> <filter_args...>
+run_ffmpeg() {
+  local input="$1" output="$2"
+  shift 2
+  local extra_args=("$@")
+
+  require_ffmpeg
+  confirm_overwrite "$output"
+
+  # Get duration for progress calc
+  local duration
+  duration=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$input" 2>/dev/null | head -1)
+
+  i360_log "Processing..."
+  show_info "$input"
+
+  # Run FFmpeg
+  ffmpeg -hide_banner -i "$input" \
+    "${extra_args[@]}" \
+    -map_metadata 0 \
+    -movflags +faststart \
+    -y "$output" 2>&1 | while IFS= read -r line; do
+      # Parse time= from FFmpeg output for progress
+      if [[ "$line" =~ time=([0-9]+):([0-9]+):([0-9]+\.[0-9]+) ]]; then
+        local h="${BASH_REMATCH[1]}" m="${BASH_REMATCH[2]}" s="${BASH_REMATCH[3]}"
+        local current=$(echo "$h * 3600 + $m * 60 + $s" | bc)
+        if [[ -n "$duration" && "$duration" != "0" ]]; then
+          local pct=$(echo "scale=0; $current * 100 / $duration" | bc 2>/dev/null)
+          printf "\r${DIM}  progress: %s%%${RESET}  " "$pct"
+        fi
+      fi
+    done
+
+  local exit_code=${PIPESTATUS[0]}
+  echo ""  # newline after progress
+
+  if [[ $exit_code -eq 0 && -f "$output" ]]; then
+    i360_ok "Done → ${BOLD}${output}${RESET}"
+    show_info "$output"
+  else
+    i360_err "FFmpeg failed (exit code $exit_code)"
+    exit 1
+  fi
+}
+
+# Build atempo filter chain for a given speed multiplier.
+# atempo only supports 0.5–2.0, so we chain multiple filters.
+# Usage: build_atempo 4  →  "atempo=2.0,atempo=2.0"
+build_atempo() {
+  local speed="$1"
+  local chain=""
+
+  # Use bc for float comparisons
+  if (( $(echo "$speed >= 1" | bc -l) )); then
+    # Speed up: chain atempo=2.0 until remainder < 2.0
+    local remaining="$speed"
+    while (( $(echo "$remaining > 2.0" | bc -l) )); do
+      [[ -n "$chain" ]] && chain="${chain},"
+      chain="${chain}atempo=2.0"
+      remaining=$(echo "scale=6; $remaining / 2.0" | bc)
+    done
+    if (( $(echo "$remaining != 1.0" | bc -l) )); then
+      [[ -n "$chain" ]] && chain="${chain},"
+      chain="${chain}atempo=${remaining}"
+    fi
+  else
+    # Slow down: chain atempo=0.5 until remainder > 0.5
+    local remaining="$speed"
+    while (( $(echo "$remaining < 0.5" | bc -l) )); do
+      [[ -n "$chain" ]] && chain="${chain},"
+      chain="${chain}atempo=0.5"
+      remaining=$(echo "scale=6; $remaining / 0.5" | bc)
+    done
+    if (( $(echo "$remaining != 1.0" | bc -l) )); then
+      [[ -n "$chain" ]] && chain="${chain},"
+      chain="${chain}atempo=${remaining}"
+    fi
+  fi
+
+  echo "$chain"
+}
+
+# ─── Plugin loader ───────────────────────────────────────────────────
+
+# List available commands from plugins
+list_commands() {
+  local cmds=()
+  if [[ -d "$PLUGIN_DIR" ]]; then
+    for plugin in "$PLUGIN_DIR"/*.sh; do
+      [[ -f "$plugin" ]] || continue
+      local name
+      name="$(basename "$plugin" .sh)"
+      local desc=""
+      # Read the DESCRIPTION line from the plugin
+      desc=$(grep '^# DESCRIPTION:' "$plugin" 2>/dev/null | head -1 | sed 's/^# DESCRIPTION: *//')
+      cmds+=("  ${BOLD}${name}${RESET}    ${desc}")
+    done
+  fi
+  printf '%s\n' "${cmds[@]}"
+}
+
+# Run a plugin by name
+run_plugin() {
+  local cmd="$1"
+  shift
+  local plugin_file="${PLUGIN_DIR}/${cmd}.sh"
+
+  if [[ ! -f "$plugin_file" ]]; then
+    i360_err "Unknown command: $cmd"
+    echo ""
+    echo "Available commands:"
+    list_commands
+    echo ""
+    echo "Run ${BOLD}i360 help${RESET} for usage info."
+    exit 1
+  fi
+
+  # Source the plugin (it gets access to all helper functions)
+  source "$plugin_file"
+
+  # Call the plugin's main function
+  "plugin_${cmd}" "$@"
+}
+
+# ─── Built-in commands ───────────────────────────────────────────────
+
+show_help() {
+  cat <<EOF
+${BOLD}i360${RESET} v${VERSION} — CLI video editor for Insta 360 footage
+
+${BOLD}USAGE${RESET}
+  i360 <command> [options] <input_file>
+
+${BOLD}COMMANDS${RESET}
+$(list_commands)
+
+  ${BOLD}info${RESET}      Show video file details
+  ${BOLD}help${RESET}      Show this help message
+  ${BOLD}plugins${RESET}   List installed plugins
+
+${BOLD}GLOBAL OPTIONS${RESET}
+  -o <path>     Custom output path
+  --fast        Use ultrafast encoding (bigger file, much faster)
+  --no-audio    Strip audio from output
+
+${BOLD}EXAMPLES${RESET}
+  i360 reverse video.mp4
+  i360 speed 2 video.mp4
+  i360 reverse --speed 4 video.mp4
+  i360 speed 0.5 video.mp4 -o slow_motion.mp4
+
+${BOLD}PLUGINS${RESET}
+  Drop .sh files in ${PLUGIN_DIR}/
+  Each plugin needs: # DESCRIPTION: line and a plugin_<name>() function.
+  Plugins get access to all i360 helper functions.
+
+EOF
+}
+
+show_file_info() {
+  local file="${1:-}"
+  if [[ -z "$file" ]]; then
+    i360_err "Usage: i360 info <file>"
+    exit 1
+  fi
+  validate_input "$file"
+  require_ffmpeg
+  echo ""
+  i360_log "File: ${BOLD}$(basename "$file")${RESET}"
+  ffprobe -v quiet -show_entries \
+    format=duration,size,bit_rate:stream=codec_name,codec_type,width,height,r_frame_rate,sample_rate,channels \
+    -of default=noprint_wrappers=1 "$file" 2>/dev/null | while IFS='=' read -r key val; do
+      printf "  ${DIM}%-14s${RESET} %s\n" "$key" "$val"
+    done
+  echo ""
+}
+
+# ─── Main dispatch ───────────────────────────────────────────────────
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    show_help
+    exit 0
+  fi
+
+  local cmd="$1"
+  shift
+
+  case "$cmd" in
+    help|--help|-h)
+      show_help
+      ;;
+    version|--version|-v)
+      echo "i360 v${VERSION}"
+      ;;
+    info)
+      show_file_info "$@"
+      ;;
+    plugins)
+      echo ""
+      i360_log "Installed plugins:"
+      list_commands
+      echo ""
+      i360_dim "  Plugin directory: ${PLUGIN_DIR}"
+      echo ""
+      ;;
+    *)
+      run_plugin "$cmd" "$@"
+      ;;
+  esac
+}
+
+main "$@"
