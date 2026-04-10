@@ -43,7 +43,7 @@ validate_input() {
     exit 1
   fi
   local ext="${file##*.}"
-  ext="${ext,,}"
+  ext="$(echo "$ext" | tr '[:upper:]' '[:lower:]')"
   case "$ext" in
     mp4|mov|avi|mkv|insv|webm|m4v) ;;
     *)
