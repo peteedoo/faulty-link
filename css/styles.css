@@ -15,6 +15,9 @@ body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
 .hero{padding:18px 0}
 .kicker{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
 .kicker .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);display:inline-block}
+.kicker .dot.green{background:#22c55e}
+.kicker .dot.yellow{background:#eab308}
+.kicker .dot.red{background:#ef4444}
 .hero h1{margin:8px 0 6px;font-size:24px}
 .hero p{margin:0 0 12px;color:var(--muted)}
 .ctaRow{display:flex;gap:10px;flex-wrap:wrap}
