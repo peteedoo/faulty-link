@@ -91,7 +91,7 @@ The capstone is a Faulty Link mesh backend: a Go HTTP bridge that talks to Mesht
 
 **Day 15 — Networking fundamentals + Go's net package**
 - Read: *NPwG* Ch 1 (OSI model, Go net package overview)
-- Build: A Go program that resolves a hostname to IP(s). Test it against `iamfaulty-mini.local` and `ILLMATIC`.
+- Build: A Go program that resolves a hostname to IP(s). Test it against `your-server.local` and another device on your LAN.
 
 **Day 16 — TCP + Meshtastic TCP mode**
 - Read: *NPwG* Ch 2 (TCP, listeners, connections)
