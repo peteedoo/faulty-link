@@ -3,70 +3,81 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Faulty Link — Start</title>
-  <meta name="description" content="Faulty Link — portable private networks for groups + neighborhoods." />
-  <link rel="stylesheet" href="../css/styles.css" />
-  <link rel="icon" href="../favicon.svg" />
+  <title>Faulty Link — How it works</title>
+  <meta name="description" content="How Faulty Link works: Link (program), Base (portable kit), and local chapters like Den (Denver). Simple model, light operations." />
+  <link rel="canonical" href="https://iamfaulty.com/start/" />
   <meta name="theme-color" content="#0b74de" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Faulty Link" />
+  <meta property="og:title" content="Faulty Link — How it works" />
+  <meta property="og:description" content="Link + Base + Chapters. Keep the system coherent. Grow only when support is stable." />
+  <meta property="og:url" content="https://iamfaulty.com/start/" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Faulty Link — How it works" />
+  <meta name="twitter:description" content="Link + Base + Chapters. Keep the system coherent. Grow only when support is stable." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https:; form-action 'self' mailto:; base-uri 'self'; frame-ancestors 'none'; object-src 'none'" />
+  <link rel="stylesheet" href="../css/styles.css" integrity="sha384-g6aLQrA3YKdQVNHss1XAqhOGMb7JrMQCy72ACqofMPwRh4mSq/4ApymxgOaf3Xwo" crossorigin="anonymous" />
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to main content</a>
   <noscript><div class="noscript-warning">JavaScript is recommended for interactive features (navigation, signup). Please enable JavaScript.</div></noscript>
   <div class="wrap">
-    <header class="topbar">
-      <a class="brand" href="../">
+    <header class="topbar" aria-label="Site">
+      <a class="brand" href="../" data-home>
         <span class="logo" aria-hidden="true"></span>
         <span>Faulty Link</span>
       </a>
-      <nav class="nav" id="nav"></nav>
+      <nav class="nav" id="nav" aria-label="Primary" aria-live="polite"></nav>
     </header>
 
-    <main>
-      <section class="hero">
-        <div class="kicker"><span class="dot"></span>How it works</div>
+    <main id="main">
+      <header class="hero">
+        <div class="kicker"><span class="dot" aria-hidden="true"></span>How it works</div>
         <h1>Simple model: Link + Base + Chapters.</h1>
         <p>Keep the system coherent. Keep operations light. Grow only when support is stable.</p>
         <div class="ctaRow">
           <button class="btn" type="button" data-action="openSignup">Join Early Access</button>
-          <a class="btn secondary" href="../start/">How it works</a>
           <a class="btn secondary" href="../den/">Denver Pilot (Den)</a>
+          <a class="btn secondary" href="../den/events/">Field tests</a>
+        </div>
+      </header>
+
+      <section class="grid cols3 mt-18" aria-label="Model">
+        <div class="card">
+          <h2>Link (program)</h2>
+          <ul class="list">
+            <li>The umbrella: rules, onboarding, and how pilots run.</li>
+            <li>Public pages, signups, updates.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Base (kit)</h2>
+          <ul class="list">
+            <li>Portable kit used in tests (comms first).</li>
+            <li>Designed for durability, battery reliability, simple setup.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Den (chapter)</h2>
+          <ul class="list">
+            <li>Denver pilot — local tests, local norms, local organizers.</li>
+            <li>Later: other chapters without rebranding.</li>
+          </ul>
         </div>
       </section>
 
-      <section class="grid cols3" style="margin-top:18px">
-  <div class="card">
-    <h2>Link (program)</h2>
-    <ul class="list">
-      <li>The umbrella: rules, onboarding, and how pilots run.</li>
-      <li>Public pages, signups, updates.</li>
-    </ul>
-  </div>
-  <div class="card">
-    <h2>Base (kit)</h2>
-    <ul class="list">
-      <li>Portable kit used in tests (comms first).</li>
-      <li>Designed for durability, battery reliability, simple setup.</li>
-    </ul>
-  </div>
-  <div class="card">
-    <h2>Den (chapter)</h2>
-    <ul class="list">
-      <li>Denver pilot — local tests, local norms, local organizers.</li>
-      <li>Later: other chapters without rebranding.</li>
-    </ul>
-  </div>
-</section>
-
-<section class="card" style="margin-top:18px">
-  <h2>Operating constraints (regen, practical)</h2>
-  <ul class="list">
-    <li>Capability &gt; dependency</li>
-    <li>Durability &gt; disposability</li>
-    <li>Margin &gt; speed</li>
-    <li>Direct relationships &gt; platforms</li>
-    <li>Grow by readiness, not pressure</li>
-  </ul>
-</section>
-
+      <section class="card mt-18">
+        <h2>Operating constraints (regen, practical)</h2>
+        <ul class="list">
+          <li>Capability > dependency</li>
+          <li>Durability > disposability</li>
+          <li>Margin > speed</li>
+          <li>Direct relationships > platforms</li>
+          <li>Grow by readiness, not pressure</li>
+        </ul>
+      </section>
     </main>
 
     <footer class="footer">
@@ -75,9 +86,6 @@
     </footer>
   </div>
 
-  <script type="module">
-    import { injectCommon } from "../js/site.js";
-    injectCommon();
-  </script>
+  <script type="module" src="../js/site.js" integrity="sha384-opG1WfUviu1SptqcV+Dn1omi5zJR1SIjg5ZevZCsVdQ2Kz6+yR0s8UeoaZaUI3Yy" crossorigin="anonymous"></script>
 </body>
 </html>

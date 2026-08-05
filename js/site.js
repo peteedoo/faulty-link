@@ -1,277 +1,445 @@
 import { CONFIG } from "./config.js";
 
 /**
- * site.js — Main site behavior
+ * site.js — Main site behavior (entry module for every page)
  *
- * Handles:
- * - Navigation injection (reads CONFIG.navLinks, resolves with basePath)
- * - Modal rendering and accessibility (form, focus trap, ESC to close)
- * - Form submission (clipboard, mailto, postJson)
- * - Toast notifications
- * - Year in footer
+ * - Navigation injection (CONFIG.navLinks + basePath)
+ * - Modal rendering + accessibility (focus trap, ESC, return focus)
+ * - Form submission (clipboard | mailto | postJson)
+ * - Toast notifications + footer year
  *
- * Called on every page via: import { injectCommon } from "./js/site.js"; injectCommon();
+ * Load with: <script type="module" src="…/js/site.js"></script>
  */
 
-// --- Utilities
-function escapeHtml(str){
+const TOAST_TIMEOUT_MS = 3000;
+// Modal stacking lives in css/styles.css (--z-modal). Avoid style="" attributes:
+// CSP style-src 'self' blocks inline style attributes.
+
+// --- Utilities ---------------------------------------------------------------
+
+/** Decode signup recipient: plain `to`, else base64 `toEncoded` (light scraping friction). */
+function signupRecipient() {
+  const f = CONFIG.signupForm || {};
+  if (f.to) return String(f.to);
+  if (f.toEncoded) {
+    try {
+      return atob(String(f.toEncoded));
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function escapeHtml(str) {
   return String(str ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function joinBase(href){
-  const base = String(CONFIG.basePath || "").replace(/\/+$/,'');
+function joinBase(href) {
+  const base = String(CONFIG.basePath || "").replace(/\/+$/, "");
   const rel = String(href || "");
-  if(!base) return rel;
-  return base + (rel.startsWith('/') ? rel : ('/' + rel));
+  if (!base) return rel || "/";
+  return base + (rel.startsWith("/") ? rel : `/${rel}`);
 }
 
-function normalizePath(p){
-  let x = (p || "/").replace(/\/+$/, "");
-  if(x === "") x = "/";
-  return x;
+/** Normalize a path for active-link comparison (drop trailing slash, ignore query/hash). */
+function normalizePath(p) {
+  try {
+    const path = new URL(p, "http://local.invalid").pathname;
+    const trimmed = path.replace(/\/+$/, "");
+    return trimmed === "" ? "/" : trimmed;
+  } catch {
+    let x = String(p || "/").split(/[?#]/)[0].replace(/\/+$/, "");
+    return x === "" ? "/" : x;
+  }
 }
 
-// --- Toast (minimal)
-function showToast(msg, timeout=3000){
-  let t = document.getElementById('siteToast');
-  if(!t){
-    t = document.createElement('div');
-    t.id = 'siteToast';
-    t.setAttribute('role','status');
-    t.className = 'site-toast';
+function currentPath() {
+  const base = CONFIG.basePath || "";
+  const raw = location.pathname;
+  const stripped = base && raw.startsWith(base) ? raw.slice(base.length) || "/" : raw;
+  return normalizePath(stripped);
+}
+
+// --- Toast -------------------------------------------------------------------
+
+function showToast(msg, timeout = TOAST_TIMEOUT_MS) {
+  let t = document.getElementById("siteToast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "siteToast";
+    t.setAttribute("role", "status");
+    t.setAttribute("aria-live", "polite");
+    t.className = "site-toast";
     document.body.appendChild(t);
   }
   t.textContent = msg;
-  t.classList.add('visible');
+  t.classList.add("visible");
   clearTimeout(t._timeout);
-  t._timeout = setTimeout(()=> t.classList.remove('visible'), timeout);
+  t._timeout = setTimeout(() => t.classList.remove("visible"), timeout);
 }
 
-// --- Modal rendering and behavior
-function fieldHtml(f){
-  const required = f.required ? 'required' : '';
-  const requiredLabel = f.required ? '<span aria-label="required"> *</span>' : '';
-  const label = `<label for="${f.key}">${escapeHtml(f.label)}${requiredLabel}</label>`;
-  let input = '';
-  if(f.type === 'textarea'){
-    input = `<textarea id="${f.key}" name="${f.key}" placeholder="${escapeHtml(f.placeholder||'')}" ${required} aria-describedby="${f.key}-help"></textarea>`;
-  } else if(f.type === 'select'){
-    input = `<select id="${f.key}" name="${f.key}" ${required} aria-describedby="${f.key}-help"><option value="">${escapeHtml(f.placeholder || 'Select...')}</option>${(f.options||[]).map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}</select>`;
+// --- Modal + form ------------------------------------------------------------
+
+function fieldHtml(f) {
+  const required = f.required ? "required" : "";
+  const requiredLabel = f.required
+    ? '<span aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span>'
+    : "";
+  const helpId = f.help ? `${f.key}-help` : "";
+  const errorId = `${f.key}-error`;
+  const describedBy = [helpId, errorId].filter(Boolean).join(" ");
+  const describedByAttr = describedBy ? ` aria-describedby="${describedBy}"` : "";
+
+  const label = `<label for="${escapeHtml(f.key)}">${escapeHtml(f.label)}${requiredLabel}</label>`;
+  let input = "";
+  if (f.type === "textarea") {
+    input = `<textarea id="${escapeHtml(f.key)}" name="${escapeHtml(f.key)}" placeholder="${escapeHtml(f.placeholder || "")}" ${required}${describedByAttr}></textarea>`;
+  } else if (f.type === "select") {
+    const opts = (f.options || [])
+      .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+      .join("");
+    input = `<select id="${escapeHtml(f.key)}" name="${escapeHtml(f.key)}" ${required}${describedByAttr}><option value="">${escapeHtml(f.placeholder || "Select...")}</option>${opts}</select>`;
   } else {
-    input = `<input id="${f.key}" name="${f.key}" type="${f.type || 'text'}" placeholder="${escapeHtml(f.placeholder||'')}" ${required} aria-describedby="${f.key}-help" />`;
+    input = `<input id="${escapeHtml(f.key)}" name="${escapeHtml(f.key)}" type="${escapeHtml(f.type || "text")}" placeholder="${escapeHtml(f.placeholder || "")}" ${required}${describedByAttr} />`;
   }
-  const classes = (f.type === 'textarea') ? 'span2' : '';
-  return `<div class="field ${classes}">${label}${input}</div>`;
+  const help = f.help
+    ? `<p class="field-help mini" id="${helpId}">${escapeHtml(f.help)}</p>`
+    : "";
+  const err = `<p class="field-error" id="${errorId}" hidden></p>`;
+  const classes = f.type === "textarea" ? "field span2" : "field";
+  return `<div class="${classes}">${label}${input}${help}${err}</div>`;
 }
 
 let lastTrigger = null;
 
-function buildModalHtml(){
+function buildModalHtml() {
   const f = CONFIG.signupForm || {};
   return `
     <div id="modalBackdrop" class="modal-backdrop">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-label="Signup form">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-header">
           <div>
-            <h2 id="modalTitle">${escapeHtml(f.title || 'Join Early Access')}</h2>
-            <p class="mini">${escapeHtml(f.blurb || '')}</p>
+            <h2 id="modalTitle">${escapeHtml(f.title || "Join Early Access")}</h2>
+            <p class="mini">${escapeHtml(f.blurb || "")}</p>
           </div>
-          <button class="btn secondary" type="button" data-action="closeModal" aria-label="Close dialog">×</button>
+          <button class="btn secondary icon-btn" type="button" data-action="closeModal" aria-label="Close dialog">
+            <span aria-hidden="true">×</span>
+          </button>
         </div>
-        <form id="signupForm">
+        <form id="signupForm" novalidate>
+          <div id="formStatus" class="form-error" role="alert" aria-live="assertive" hidden></div>
           <div class="form-grid">
-            ${(f.fields || []).map(fieldHtml).join('')}
+            ${(f.fields || []).map(fieldHtml).join("")}
           </div>
-          <div class="ctaRow" style="margin-top:14px">
+          <div class="ctaRow mt-14">
             <button class="btn" type="submit">Submit</button>
             <button class="btn secondary" type="button" data-action="closeModal">Cancel</button>
           </div>
           <div class="hr"></div>
-          <p class="mini">Submit mode: <b>${escapeHtml(f.submitMode || 'clipboard')}</b>.</p>
+          <p class="mini">Submit mode: <b>${escapeHtml(f.submitMode || "clipboard")}</b>.</p>
         </form>
       </div>
     </div>
   `;
 }
 
-function openSignup(e){
-  if(document.getElementById('modalBackdrop')) return;
+function openSignup(e) {
+  if (document.getElementById("modalBackdrop")) return;
   lastTrigger = (e && e.currentTarget) || document.activeElement;
-  document.body.insertAdjacentHTML('beforeend', buildModalHtml());
-  document.body.classList.add('modal-open'); // scroll lock
+  document.body.insertAdjacentHTML("beforeend", buildModalHtml());
+  document.body.classList.add("modal-open");
 
-  const backdrop = document.getElementById('modalBackdrop');
-  const modal = backdrop.querySelector('.modal');
+  const backdrop = document.getElementById("modalBackdrop");
+  const modal = backdrop.querySelector(".modal");
 
-  // focus management: focus first input or submit
-  const firstInput = modal.querySelector('input, textarea, select, button[type="submit"]');
-  if(firstInput) firstInput.focus();
+  const firstInput = modal.querySelector("input, textarea, select, button[type='submit']");
+  if (firstInput) firstInput.focus();
 
-  // close on backdrop click
-  backdrop.addEventListener('click', (ev)=>{
-    if(ev.target === backdrop) closeModal();
+  backdrop.addEventListener("click", (ev) => {
+    if (ev.target === backdrop) closeModal();
   });
 
-  // trap focus
   trapFocus(modal);
+  document.addEventListener("keydown", modalKeyHandler);
 
-  // ESC to close
-  document.addEventListener('keydown', modalKeyHandler);
-
-  const form = document.getElementById('signupForm');
-  if(form) form.addEventListener('submit', onSubmit);
+  const form = document.getElementById("signupForm");
+  if (form) {
+    form.addEventListener("submit", onSubmit);
+    form.addEventListener("input", clearFieldErrorOnInput);
+  }
 
   wireActions();
 }
 
-function closeModal(){
-  const m = document.getElementById('modalBackdrop');
-  if(!m) return;
+function closeModal() {
+  const m = document.getElementById("modalBackdrop");
+  if (!m) return;
   m.remove();
-  document.body.classList.remove('modal-open');
-  document.removeEventListener('keydown', modalKeyHandler);
-  if(lastTrigger && typeof lastTrigger.focus === 'function') lastTrigger.focus();
+  document.body.classList.remove("modal-open");
+  document.removeEventListener("keydown", modalKeyHandler);
+  if (lastTrigger && typeof lastTrigger.focus === "function") lastTrigger.focus();
   lastTrigger = null;
 }
 
-function modalKeyHandler(e){
-  if(e.key === 'Escape') closeModal();
+function modalKeyHandler(e) {
+  if (e.key === "Escape") closeModal();
 }
 
-function trapFocus(modal){
-  const focusable = modal.querySelectorAll('a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])');
-  if(!focusable.length) return;
+function trapFocus(modal) {
+  const focusable = modal.querySelectorAll(
+    'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+  );
+  if (!focusable.length) return;
   const first = focusable[0];
-  const last = focusable[focusable.length-1];
-  modal.addEventListener('keydown', (e)=>{
-    if(e.key !== 'Tab') return;
-    if(e.shiftKey && document.activeElement === first){
-      e.preventDefault(); last.focus();
-    } else if(!e.shiftKey && document.activeElement === last){
-      e.preventDefault(); first.focus();
+  const last = focusable[focusable.length - 1];
+  modal.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
     }
   });
 }
 
-async function onSubmit(e){
+function clearFieldErrorOnInput(e) {
+  const el = e.target;
+  if (!el || !el.name) return;
+  setFieldError(el.name, "");
+}
+
+function setFieldError(key, message) {
+  const input = document.getElementById(key);
+  const err = document.getElementById(`${key}-error`);
+  if (input) {
+    if (message) {
+      input.setAttribute("aria-invalid", "true");
+    } else {
+      input.removeAttribute("aria-invalid");
+    }
+  }
+  if (err) {
+    if (message) {
+      err.hidden = false;
+      err.textContent = message;
+    } else {
+      err.hidden = true;
+      err.textContent = "";
+    }
+  }
+}
+
+function setFormStatus(message) {
+  const status = document.getElementById("formStatus");
+  if (!status) return;
+  if (message) {
+    status.hidden = false;
+    status.textContent = message;
+  } else {
+    status.hidden = true;
+    status.textContent = "";
+  }
+}
+
+function validateForm(form, fields) {
+  let ok = true;
+  let firstInvalid = null;
+  for (const f of fields) {
+    const raw = (form.elements[f.key]?.value || "").trim();
+    setFieldError(f.key, "");
+    if (f.required && !raw) {
+      setFieldError(f.key, `${f.label || f.key} is required.`);
+      ok = false;
+      if (!firstInvalid) firstInvalid = document.getElementById(f.key);
+      continue;
+    }
+    if (raw && (f.type === "email" || f.key === "email")) {
+      // Practical email check — not a full RFC parser.
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+        setFieldError(f.key, "Enter a valid email address.");
+        ok = false;
+        if (!firstInvalid) firstInvalid = document.getElementById(f.key);
+      }
+    }
+  }
+  if (firstInvalid) firstInvalid.focus();
+  return ok;
+}
+
+async function onSubmit(e) {
   e.preventDefault();
   const form = e.target;
   const fields = CONFIG.signupForm?.fields || [];
+  setFormStatus("");
+
+  if (!validateForm(form, fields)) {
+    setFormStatus("Please fix the highlighted fields.");
+    return;
+  }
+
   const data = {};
-  fields.forEach(f=>{ data[f.key] = (form.elements[f.key]?.value || '').trim(); });
+  fields.forEach((f) => {
+    data[f.key] = (form.elements[f.key]?.value || "").trim();
+  });
 
   const payloadText = [
-    `Project: ${CONFIG.productName || 'Faulty Link'}`,
-    ...fields.map(f=>`${f.label || f.key}: ${data[f.key] || ''}`)
-  ].join('\n');
+    `Project: ${CONFIG.productName || "Faulty Link"}`,
+    ...fields.map((f) => `${f.label || f.key}: ${data[f.key] || ""}`),
+  ].join("\n");
 
-  const mode = CONFIG.signupForm?.submitMode || 'clipboard';
-  if(mode === 'mailto'){
-    // Use configurable recipient/subject from CONFIG.signupForm when present
-    const to = CONFIG.signupForm?.to || 'info@iamfaulty.com';
-    const subjectText = CONFIG.signupForm?.subject || `${CONFIG.productName || 'Faulty Link'} — Early Access`;
-    const subject = encodeURIComponent(subjectText);
-    const body = encodeURIComponent(payloadText);
-    // Open the user's mail client with prefilled subject and body
-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
-    showInlineSuccess('Opened email client.');
-  } else if(mode === 'postJson'){
-    const endpoint = CONFIG.signupForm?.endpoint;
-    if(!endpoint){
-      showToast('No endpoint configured for postJson.');
+  const mode = CONFIG.signupForm?.submitMode || "clipboard";
+  if (mode === "mailto") {
+    const to = signupRecipient();
+    if (!to) {
+      setFormStatus("No recipient configured for mailto.");
       return;
     }
-    try{
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: CONFIG.productName, data })
-      });
-      if(res.ok){
-        showInlineSuccess('Submitted. Thank you!');
-      } else {
-        showInlineError('Submission failed. Please try again later.');
-      }
-    }catch(err){
-      console.error(err);
-      showInlineError('Network error. Please try again later.');
+    const subjectText =
+      CONFIG.signupForm?.subject || `${CONFIG.productName || "Faulty Link"} — Early Access`;
+    const subject = encodeURIComponent(subjectText);
+    const body = encodeURIComponent(payloadText);
+    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+    showInlineSuccess("Opened email client.");
+  } else if (mode === "postJson") {
+    const endpoint = CONFIG.signupForm?.endpoint;
+    if (!endpoint) {
+      showToast("No endpoint configured for postJson.");
+      return;
     }
-  } else { // clipboard
-    try{
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Explicit: never send cookies cross-origin; reduces CSRF surface.
+        credentials: "omit",
+        body: JSON.stringify({ project: CONFIG.productName, data }),
+      });
+      if (res.ok) {
+        showInlineSuccess("Submitted. Thank you!");
+      } else {
+        setFormStatus("Submission failed. Please try again later.");
+      }
+    } catch (err) {
+      console.error(err);
+      setFormStatus("Network error. Please try again later.");
+    }
+  } else {
+    // clipboard (default fallback)
+    try {
       await navigator.clipboard.writeText(payloadText);
-      showInlineSuccess('Copied to clipboard. Paste into your tracker / email draft.');
-    }catch(err){
-      // fallback: open mailto with body as backup
-      try{ prompt('Copy this:', payloadText); showInlineSuccess('Copied (prompt)'); }catch(e){ showToast('Could not copy.'); }
+      showInlineSuccess("Copied to clipboard. Paste into your tracker / email draft.");
+    } catch (err) {
+      try {
+        // Last-resort fallback when Clipboard API is blocked.
+        const ta = document.createElement("textarea");
+        ta.value = payloadText;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        ta.remove();
+        if (ok) showInlineSuccess("Copied to clipboard.");
+        else showToast("Could not copy. Please try again.");
+      } catch (e2) {
+        showToast("Could not copy.");
+      }
     }
   }
 }
 
-function showInlineSuccess(msg){
-  const form = document.getElementById('signupForm');
-  if(!form) return;
-  form.innerHTML = `<div class="card"><p>${escapeHtml(msg)}</p><div class="ctaRow" style="margin-top:12px"><button class="btn" type="button" data-action="closeModal">Close</button></div></div>`;
+function showInlineSuccess(msg) {
+  const form = document.getElementById("signupForm");
+  if (!form) return;
+  form.innerHTML = `<div class="card"><p>${escapeHtml(msg)}</p><div class="ctaRow mt-12"><button class="btn" type="button" data-action="closeModal">Close</button></div></div>`;
   wireActions();
+  const closeBtn = form.querySelector('[data-action="closeModal"]');
+  if (closeBtn) closeBtn.focus();
 }
 
-function showInlineError(msg){
-  const form = document.getElementById('signupForm');
-  if(!form) return;
-  let err = form.querySelector('.form-error');
-  if(!err){ err = document.createElement('div'); err.className='form-error'; form.insertBefore(err, form.firstChild); }
-  err.textContent = msg;
-}
+// --- Action wiring -----------------------------------------------------------
 
-// --- Wire actions (data-action handlers)
-function wireActions(){
-  document.querySelectorAll('[data-action]').forEach(el=>{
-    // avoid double-binding
-    if(el._wired) return; el._wired = true;
-    el.addEventListener('click', (ev)=>{
+function wireActions() {
+  document.querySelectorAll("[data-action]").forEach((el) => {
+    if (el._wired) return;
+    el._wired = true;
+    el.addEventListener("click", (ev) => {
       const act = el.dataset.action;
-      if(act === 'openSignup') openSignup(ev);
-      if(act === 'closeModal') closeModal();
+      if (act === "openSignup") {
+        // Prevent bare href="#" from jumping the page.
+        if (el.tagName === "A") ev.preventDefault();
+        openSignup(ev);
+      }
+      if (act === "closeModal") closeModal();
     });
   });
 }
 
-// --- Navigation injection
-export function injectCommon(){
-  // year
-  const y = document.getElementById('year'); if(y) y.textContent = new Date().getFullYear();
+// --- Navigation + boot -------------------------------------------------------
 
-  // meta + favicon (safe defaults). Prefer static head edits, but this helps ensure presence.
-  try{
-    if(!document.querySelector('link[rel="icon"]')){
-      const l = document.createElement('link'); l.rel='icon'; l.href = joinBase('/favicon.svg'); l.type='image/svg+xml'; document.head.appendChild(l);
+export function injectCommon() {
+  const y = document.getElementById("year");
+  if (y) y.textContent = String(new Date().getFullYear());
+
+  try {
+    if (!document.querySelector('link[rel="icon"]')) {
+      const l = document.createElement("link");
+      l.rel = "icon";
+      l.href = joinBase("/favicon.svg");
+      l.type = "image/svg+xml";
+      document.head.appendChild(l);
     }
-  }catch(e){/*noop*/}
+  } catch (e) {
+    /* noop */
+  }
 
-  const nav = document.getElementById('nav');
-  if(nav){
-    const links = (CONFIG.navLinks && CONFIG.navLinks.length) ? CONFIG.navLinks : [
-      { href: '/', label: 'Home' },
-      { href: '/start/', label: 'Start' },
-      { href: '/den/', label: `${CONFIG.chapterName} (${CONFIG.chapterCityLabel})` },
-      { href: '/den/events/', label: 'Events' },
-      { href: '/den/eiber/', label: 'Eiber' },
-    ];
-    nav.innerHTML = '';
-    const here = normalizePath(location.pathname.replace(CONFIG.basePath || '', ''));
-    links.forEach(l=>{
-      const a = document.createElement('a');
-      const hrefResolved = joinBase(l.href);
-      a.className = 'pill' + (normalizePath(l.href) === here ? ' active' : '');
-      a.href = hrefResolved;
+  const nav = document.getElementById("nav");
+  if (nav) {
+    // Nav is injected once at boot; polite live region helps AT users notice it.
+    if (!nav.hasAttribute("aria-label")) nav.setAttribute("aria-label", "Primary");
+    if (!nav.hasAttribute("aria-live")) nav.setAttribute("aria-live", "polite");
+    // Atomic so AT announces the finished link set, not each append.
+    if (!nav.hasAttribute("aria-relevant")) nav.setAttribute("aria-relevant", "additions text");
+    nav.setAttribute("aria-busy", "true");
+    const links =
+      CONFIG.navLinks && CONFIG.navLinks.length
+        ? CONFIG.navLinks
+        : [
+            { href: "/", label: "Home" },
+            { href: "/start/", label: "Start" },
+            { href: "/den/", label: `${CONFIG.chapterName} (${CONFIG.chapterCityLabel})` },
+            { href: "/den/events/", label: "Events" },
+            { href: "/den/eiber/", label: "Eiber" },
+          ];
+    nav.replaceChildren();
+    const here = currentPath();
+    links.forEach((l) => {
+      const a = document.createElement("a");
+      a.className = "pill" + (normalizePath(l.href) === here ? " active" : "");
+      a.href = joinBase(l.href);
       a.textContent = l.label;
+      if (normalizePath(l.href) === here) a.setAttribute("aria-current", "page");
       nav.appendChild(a);
     });
+    nav.setAttribute("aria-busy", "false");
   }
+
+  // Resolve brand home link through basePath when marked data-home.
+  document.querySelectorAll("[data-home]").forEach((a) => {
+    a.setAttribute("href", joinBase("/"));
+  });
 
   wireActions();
 }
+
+// Auto-boot when loaded directly as a module entry (no inline script needed).
+injectCommon();

@@ -4,69 +4,82 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Faulty Link — Denver Field Tests</title>
-  <meta name="description" content="Denver-area field tests for Faulty Link mesh networks. Join a test, see results, help build the playbook." />
-  <link rel="stylesheet" href="../../css/styles.css" />
-  <link rel="icon" href="../../favicon.svg" />
+  <meta name="description" content="Denver-area field tests for Faulty Link mesh networks. Join a test, see results, help build the playbook. Summer 2026 schedule." />
+  <link rel="canonical" href="https://iamfaulty.com/den/events/" />
   <meta name="theme-color" content="#0b74de" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Faulty Link" />
+  <meta property="og:title" content="Faulty Link — Denver Field Tests" />
+  <meta property="og:description" content="Practical mesh-network tests in real Denver conditions. Small groups, clear goals, published results." />
+  <meta property="og:url" content="https://iamfaulty.com/den/events/" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Faulty Link — Denver Field Tests" />
+  <meta name="twitter:description" content="Practical mesh-network tests in real Denver conditions. Summer 2026 schedule." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https:; form-action 'self' mailto:; base-uri 'self'; frame-ancestors 'none'; object-src 'none'" />
+  <link rel="stylesheet" href="../../css/styles.css" integrity="sha384-g6aLQrA3YKdQVNHss1XAqhOGMb7JrMQCy72ACqofMPwRh4mSq/4ApymxgOaf3Xwo" crossorigin="anonymous" />
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml" />
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to main content</a>
   <noscript><div class="noscript-warning">JavaScript is recommended for interactive features (navigation, signup). Please enable JavaScript.</div></noscript>
   <div class="wrap">
-    <header class="topbar">
-      <a class="brand" href="../../">
+    <header class="topbar" aria-label="Site">
+      <a class="brand" href="../../" data-home>
         <span class="logo" aria-hidden="true"></span>
         <span>Faulty Link</span>
       </a>
-      <nav class="nav" id="nav"></nav>
+      <nav class="nav" id="nav" aria-label="Primary" aria-live="polite"></nav>
     </header>
 
-    <main>
-      <section class="hero">
-        <div class="kicker"><span class="dot green"></span>Recruiting testers</div>
+    <main id="main">
+      <header class="hero">
+        <div class="kicker"><span class="dot green" aria-hidden="true"></span>Recruiting testers</div>
         <h1>Denver Field Tests — Summer 2026</h1>
         <p>Practical mesh-network tests in real Denver conditions. Small groups, clear goals, published results.</p>
         <div class="ctaRow">
           <button class="btn" type="button" data-action="openSignup">Sign Up to Test</button>
           <a class="btn secondary" href="../../start/">How It Works</a>
         </div>
-      </section>
+      </header>
 
-      <section class="grid cols3" style="margin-top:24px">
-        <div class="card status-recruiting">
-          <div class="kicker"><span class="dot green"></span>Recruiting</div>
-          <h2>Test 1: Sloan's Lake Loop</h2>
+      <h2 id="upcoming-tests" class="visually-hidden">Upcoming tests</h2>
+      <section class="grid cols3 mt-24" aria-labelledby="upcoming-tests">
+        <article class="card status-recruiting">
+          <div class="kicker"><span class="dot green" aria-hidden="true"></span>Recruiting</div>
+          <h3>Test 1: Sloan's Lake Loop</h3>
           <p><b>When:</b> June 21, 2026 · 9:00 AM</p>
           <p><b>Where:</b> Sloan's Lake Park, Denver</p>
           <p><b>Goal:</b> Range test across 2.6 mi lake loop with 3 relay nodes</p>
           <div class="hr"></div>
           <p class="mini"><b>Spots:</b> 4 of 8 filled · <b>Duration:</b> 90 min · <b>Gear:</b> Provided</p>
-          <a class="pill" href="#" data-action="openSignup">Reserve spot</a>
-        </div>
+          <button class="btn secondary" type="button" data-action="openSignup">Reserve spot</button>
+        </article>
 
-        <div class="card status-planning">
-          <div class="kicker"><span class="dot yellow"></span>Planning</div>
-          <h2>Test 2: Eiber Neighborhood Net</h2>
+        <article class="card status-planning">
+          <div class="kicker"><span class="dot yellow" aria-hidden="true"></span>Planning</div>
+          <h3>Test 2: Eiber Neighborhood Net</h3>
           <p><b>When:</b> July 12, 2026 · 10:00 AM</p>
           <p><b>Where:</b> Eiber neighborhood, Lakewood</p>
           <p><b>Goal:</b> Static node test — 5 households, 48-hour messaging</p>
           <div class="hr"></div>
           <p class="mini"><b>Spots:</b> 2 of 5 filled · <b>Duration:</b> 48 hrs · <b>Gear:</b> Loaner nodes</p>
-          <a class="pill" href="#" data-action="openSignup">Express interest</a>
-        </div>
+          <button class="btn secondary" type="button" data-action="openSignup">Express interest</button>
+        </article>
 
-        <div class="card status-planning">
-          <div class="kicker"><span class="dot yellow"></span>Planning</div>
-          <h2>Test 3: Red Rocks Trail</h2>
+        <article class="card status-planning">
+          <div class="kicker"><span class="dot yellow" aria-hidden="true"></span>Planning</div>
+          <h3>Test 3: Red Rocks Trail</h3>
           <p><b>When:</b> August 2, 2026 · 8:00 AM</p>
           <p><b>Where:</b> Red Rocks Park, Morrison</p>
           <p><b>Goal:</b> Terrain test — elevation, rock interference, group spread</p>
           <div class="hr"></div>
           <p class="mini"><b>Spots:</b> 1 of 6 filled · <b>Duration:</b> 3 hrs · <b>Gear:</b> BYO or loaner</p>
-          <a class="pill" href="#" data-action="openSignup">Express interest</a>
-        </div>
+          <button class="btn secondary" type="button" data-action="openSignup">Express interest</button>
+        </article>
       </section>
 
-      <section class="card" style="margin-top:24px">
+      <section class="card mt-24">
         <h2>What to expect</h2>
         <div class="grid cols2">
           <ul class="list">
@@ -82,11 +95,11 @@
         </div>
       </section>
 
-      <section class="card" style="margin-top:24px">
+      <section class="card mt-24">
         <h2>Past test results</h2>
         <p class="mini">No completed tests yet. First results will be posted here after Sloan's Lake (June 21).</p>
         <div class="hr"></div>
-        <p class="mini">Want early access to results? <a href="#" data-action="openSignup">Join the list</a>.</p>
+        <p class="mini">Want early access to results? <button class="btn secondary" type="button" data-action="openSignup">Join the list</button></p>
       </section>
     </main>
 
@@ -96,9 +109,6 @@
     </footer>
   </div>
 
-  <script type="module">
-    import { injectCommon } from "../../js/site.js";
-    injectCommon();
-  </script>
+  <script type="module" src="../../js/site.js" integrity="sha384-opG1WfUviu1SptqcV+Dn1omi5zJR1SIjg5ZevZCsVdQ2Kz6+yR0s8UeoaZaUI3Yy" crossorigin="anonymous"></script>
 </body>
 </html>
