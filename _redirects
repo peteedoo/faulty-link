@@ -1,1 +1,2 @@
-/* /index.html 200
+# Multi-page static site: real folder routes win.
+# Intentionally no SPA catch-all (/* → /index.html) so missing paths 404 instead of masking as home.

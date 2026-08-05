@@ -42,8 +42,10 @@ export const CONFIG = {
 		// 'postJson' — POSTs JSON to your endpoint (requires CORS headers)
 		// default mode: mailto so founder receives signups by email; change to 'clipboard' or 'postJson' if desired
 		submitMode: 'mailto',
-		// when using mailto, set the recipient and subject here (founder-editable)
-		to: 'info@iamfaulty.com',
+		// Recipient: prefer base64 `toEncoded` (light scraping friction). Plain `to` also works if set.
+		// Decode at runtime via atob(toEncoded) in site.js — do not store plaintext here.
+		toEncoded: 'aW5mb0BpYW1mYXVsdHkuY29t',
+		to: '',
 		subject: 'Im ready to get linked',
 
 		// Endpoint for postJson mode (leave empty if using clipboard or mailto)
