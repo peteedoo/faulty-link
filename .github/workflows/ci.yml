@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate HTML files
+        run: |
+          # Check all HTML files are well-formed (basic tag balance check)
+          for f in $(find . -name "*.html" -not -path "./node_modules/*"); do
+            echo "Checking $f..."
+            # Check for unclosed html/body tags
+            if ! grep -q "</html>" "$f"; then
+              echo "ERROR: $f missing </html> closing tag"
+              exit 1
+            fi
+            if ! grep -q "</body>" "$f"; then
+              echo "ERROR: $f missing </body> closing tag"
+              exit 1
+            fi
+          done
+          echo "All HTML files validated."
+
+      - name: Check internal links
+        run: |
+          # Verify all internal href/src links resolve to existing files
+          errors=0
+          for f in $(find . -name "*.html" -not -path "./node_modules/*"); do
+            dir=$(dirname "$f")
+            # Extract local hrefs (skip http, https, mailto, tel, #)
+            links=$(grep -oE 'href="[^"#]+"' "$f" | sed 's/href="//;s/"//' | \
+              grep -v '^https\?:' | grep -v '^mailto:' | grep -v '^tel:' | grep -v '^//' || true)
+            for link in $links; do
+              target="$dir/$link"
+              if [ ! -e "$target" ] && [ ! -e "${target%.html}" ] && [ ! -e "${target}/index.html" ]; then
+                echo "WARN: $f references $link (not found at $target)"
+              fi
+            done
+          done
+          echo "Link check complete (warnings are non-fatal)."
+
+      - name: Validate _redirects
+        run: |
+          if [ -f "_redirects" ]; then
+            echo "Checking _redirects format..."
+            while IFS= read -r line; do
+              # Skip comments and blank lines
+              [[ "$line" =~ ^[[:space:]]*# ]] && continue
+              [[ -z "${line// }" ]] && continue
+              # Each rule line should have at least 2 fields (from, to)
+              fields=$(echo "$line" | wc -w)
+              if [ "$fields" -lt 2 ]; then
+                echo "ERROR: _redirects line has fewer than 2 fields: $line"
+                exit 1
+              fi
+            done < _redirects
+            echo "_redirects validated."
+          fi
+
+      - name: Check for common issues
+        run: |
+          # Check no hardcoded localhost refs in production files
+          if grep -r "localhost" --include="*.html" --include="*.js" --include="*.css" . \
+            | grep -v node_modules | grep -v "config.js"; then
+            echo "WARN: localhost references found (may be intentional in config.js)"
+          fi
+          # Check CSS file exists
+          if [ ! -f "css/styles.css" ]; then
+            echo "ERROR: css/styles.css not found"
+            exit 1
+          fi
+          echo "Common issues check complete."
