@@ -1,0 +1,18 @@
+#!/bin/sh
+# Basic HTML validation on staged files
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep '\.html$')
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+echo "Validating HTML files..."
+for f in $STAGED; do
+  if ! grep -q "</html>" "$f"; then
+    echo "ERROR: $f missing </html> closing tag"
+    exit 1
+  fi
+  if ! grep -q "</body>" "$f"; then
+    echo "ERROR: $f missing </body> closing tag"
+    exit 1
+  fi
+done
+echo "HTML validation passed."
